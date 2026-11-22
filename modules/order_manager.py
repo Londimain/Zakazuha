@@ -9,16 +9,32 @@ class OrderManager:
         self.items = []
 
     def add_item(self, row):
+        article = str(row[0]) if row[0] else ""
+        name = str(row[1]) if row[1] else ""
+        source = str(row[6]) if len(row) > 6 and row[6] else ""
+        
+        # Проверка на дубликат (совпадает артикул и источник)
+        if article:
+            for item in self.items:
+                if item["article"] == article and item["source"] == source:
+                    try:
+                        current_qty = float(str(item["qty"]).replace(",", "."))
+                        item["qty"] = str(int(current_qty + 1))
+                    except ValueError:
+                        pass
+                    return False # Дубликат найден и обработан
+                    
         self.items.append({
-            "article": str(row[0]) if row[0] else "", 
-            "name": str(row[1]) if row[1] else "", 
+            "article": article, 
+            "name": name, 
             "price": str(row[2]) if row[2] else "",
             "pack": str(row[3]) if row[3] else "", 
             "unit": str(row[4]) if row[4] else "", 
             "gtin": str(row[5]) if row[5] else "",
-            "source": str(row[6]) if row[6] else "", 
+            "source": source, 
             "qty": "1", "checked": False,
         })
+        return True
 
     def clear(self):
         self.items.clear()

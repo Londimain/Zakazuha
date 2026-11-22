@@ -1,4 +1,7 @@
 # utils.py
+import hashlib
+import os
+import binascii
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                                QPushButton, QStyle, QLineEdit, QColorDialog, QDialogButtonBox)
 from PySide6.QtCore import Qt
@@ -164,7 +167,7 @@ def ask_password(parent, title="Пароль", prompt="Введите парол
         return None
     return inp.text()
 
-def show_input(parent, title, label, default=""):
+def show_input(parent, title, label, default="", echo_password=False):
     dialog = QDialog(parent)
     dialog.setWindowTitle(title)
     dialog.setMinimumWidth(400)
@@ -173,7 +176,13 @@ def show_input(parent, title, label, default=""):
     dialog.setStyleSheet("""
         QDialog { background-color: #f5f5f5; }
         QLabel { color: black; font-size: 14px; border: none; background: transparent; }
-        QLineEdit { background-color: white; border: 1px solid #ccc; padding: 5px; font-size: 14px; }
+        QLineEdit { 
+            background-color: white; 
+            color: black; /* Принудительно делаем текст черным */
+            border: 1px solid #ccc; 
+            padding: 5px; 
+            font-size: 14px; 
+        }
         QPushButton { 
             background-color: #0078D7; color: white; font-weight: bold; 
             border-radius: 4px; border: none; padding: 5px 15px; 
@@ -189,6 +198,13 @@ def show_input(parent, title, label, default=""):
 
     lbl = QLabel(label)
     inp = QLineEdit(default)
+    
+    if echo_password:
+        inp.setEchoMode(QLineEdit.Password)
+        
+    # Гарантируем, что поле ввода может принимать фокус
+    inp.setFocusPolicy(Qt.StrongFocus)
+    
     layout.addWidget(lbl)
     layout.addWidget(inp)
 
@@ -209,12 +225,17 @@ def show_input(parent, title, label, default=""):
 
     btn_ok.clicked.connect(dialog.accept)
     btn_cancel.clicked.connect(dialog.reject)
+    
+    # Позволяет нажимать Enter для подтверждения ввода
+    btn_ok.setDefault(True)
 
+    # Принудительно передаем фокус полю ввода при открытии окна
+    dialog.setFocusProxy(inp)
     inp.setFocus()
+    
     if dialog.exec() == QDialog.Accepted:
         return inp.text().strip(), True
     return "", False
-
 
 def get_custom_color(parent, initial_color=QColor("#ffffff")):
     """Окно выбора цвета с исправленной обрезкой цифр."""
@@ -263,3 +284,16 @@ def get_custom_color(parent, initial_color=QColor("#ffffff")):
     if dialog.exec() == QColorDialog.Accepted:
         return dialog.selectedColor()
     return None
+
+def hash_password(password):
+    salt = os.urandom(16)
+    pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+    return f"{binascii.hexlify(salt).decode('utf-8')}${binascii.hexlify(pwd_hash).decode('utf-8')}"
+
+def verify_password(password, stored_hash):
+    if not stored_hash or '$' not in stored_hash:
+        return False
+    salt_hex, hash_hex = stored_hash.split('$')
+    salt = binascii.unhexlify(salt_hex.encode('utf-8'))
+    test_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+    return binascii.hexlify(test_hash).decode('utf-8') == hash_hex

@@ -44,21 +44,32 @@ class UpdateChecker(QThread):
         except Exception as e:
             self.error_occurred.emit(f"Ошибка чтения version.json: {e}")
 
-def download_installer(url, dest_dir):
+def download_installer(url, dest_dir, progress_callback=None):
     filename = os.path.basename(url)
     filepath = os.path.join(dest_dir, filename)
     
     if url.startswith("http://") or url.startswith("https://"):
         resp = requests.get(url, stream=True, timeout=60)
         resp.raise_for_status()
+        total = int(resp.headers.get('content-length', 0))
+        downloaded = 0
         with open(filepath, 'wb') as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
+                    downloaded += len(chunk)
+                    if progress_callback and total:
+                        progress_callback(int(downloaded / total * 100))
     else:
         # Локальный или сетевой путь
         if not os.path.exists(url):
             raise Exception(f"Файл установщика не найден:\n{url}")
+        
+        # Имитируем прогресс для локальной копии
+        if progress_callback:
+            progress_callback(50)
         shutil.copy2(url, filepath)
+        if progress_callback:
+            progress_callback(100)
         
     return filepath

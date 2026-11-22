@@ -2,7 +2,7 @@
 ; Создан для сборки, выполненной через PyInstaller (файл Zakazuha.exe в папке dist)
 
 #define MyAppName "Заказуха"
-#define MyAppVersion "2.1.4"
+#define MyAppVersion "2.1.3"
 #define MyAppPublisher "Энергослужба"
 ; ВАЖНО: Имя файла на английском, как его собрал PyInstaller
 #define MyAppExeName "Zakazuha.exe" 
@@ -38,9 +38,9 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Берем английский Zakazuha.exe из папки dist
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ico\app.ico"; DestDir: "{app}\ico"; Flags: ignoreversion
+Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion  ;
 
 [Dirs]
 Name: "{app}"; Permissions: users-modify

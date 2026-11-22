@@ -33,14 +33,12 @@ class PublisherApp:
         self.root = root
         self.root.title("Публикатор обновлений Заказуха")
         
-        window_width = 600
-        window_height = 520
+        # Задаем минимальный размер, а высота подстроится сама
+        self.root.minsize(600, 500)
+        
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
-        center_x = int(screen_width / 2 - window_width / 2)
-        center_y = int(screen_height / 2 - window_height / 2)
-        if center_y < 0: center_y = 0
-        self.root.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+        
         self.root.resizable(False, False)
 
         icon_path = get_icon_path()
@@ -67,6 +65,15 @@ class PublisherApp:
         self.network_path = tk.StringVar(value=self.config.get("network_path", ""))
 
         self._build_ui()
+        
+        # Подстраиваем окно под содержимое и центрируем
+        self.root.update_idletasks()
+        w = self.root.winfo_width()
+        h = self.root.winfo_height()
+        center_x = int(screen_width / 2 - w / 2)
+        center_y = int(screen_height / 2 - h / 2)
+        if center_y < 0: center_y = 0
+        self.root.geometry(f'+{center_x}+{center_y}')
 
     def _load_config(self):
         if os.path.exists(CONFIG_FILE):
@@ -121,7 +128,7 @@ class PublisherApp:
         btn_browse.pack(side="left", padx=(5, 0))
 
         tk.Label(frame2, text="Что нового (Release Notes):").pack(anchor="w", pady=(10, 0))
-        self.notes_text = tk.Text(frame2, height=4, width=60, font=("Arial", 10))
+        self.notes_text = tk.Text(frame2, height=9, width=60, font=("Arial", 10))
         self.notes_text.pack(fill="x", pady=5)
         
         default_notes = "- Исправлены ошибки\n- Улучшена стабильность"
@@ -312,13 +319,45 @@ class PublisherApp:
             
             download_url = os.path.join(net_path, installer_name)
             
+            # ВАЖНО: Сначала определяем путь к файлу, а потом его читаем!
+            json_path = os.path.join(net_path, "version.json")
+
+            # Читаем старую историю, если файл существует
+            existing_history = []
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        old_data = json.load(f)
+                        if "history" in old_data:
+                            existing_history = old_data["history"]
+                        elif "latest_version" in old_data:
+                            # Конвертируем старый формат в историю
+                            existing_history.append({
+                                "version": old_data["latest_version"],
+                                "date": "Ранее",
+                                "notes": old_data.get("release_notes", "")
+                            })
+                except Exception:
+                    pass
+
+            # Формируем запись о новой версии
+            import datetime
+            new_release = {
+                "version": version,
+                "date": datetime.date.today().strftime("%d.%m.%Y"),
+                "notes": notes
+            }
+            
+            # Удаляем, если такая версия уже есть (при перезаписи), и добавляем в начало
+            existing_history = [h for h in existing_history if h["version"] != version]
+            existing_history.insert(0, new_release)
+
             version_data = {
                 "latest_version": version,
                 "download_url": download_url,
-                "release_notes": notes
+                "release_notes": notes,
+                "history": existing_history
             }
-
-            json_path = os.path.join(net_path, "version.json")
             
             if os.path.exists(json_path):
                 try:

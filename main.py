@@ -7,6 +7,7 @@ except Exception:
 import sys
 import os
 import json
+import shutil
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget, QLabel, QWidget, QSizePolicy
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtCore import Qt, QTimer
@@ -24,7 +25,7 @@ from screens.report_screen import ReportScreen
 from screens.update_screen import UpdateScreen
 from screens.settings_screen import SettingsScreen
 from screens.about_screen import AboutScreen
-from utils import show_confirm, ask_password, show_message
+from utils import show_confirm, ask_password, show_message, hash_password, verify_password
 import tempfile
 from modules.updater import UpdateChecker, download_installer
 
@@ -66,23 +67,37 @@ def create_desktop_shortcut():
         if not os.path.exists(folder):
             os.makedirs(folder, exist_ok=True)
 
-        ico_path = os.path.join(ASSET_DIR, "ico", "app.ico")
-        if os.path.exists(ico_path):
+        ico_src = os.path.join(ASSET_DIR, "ico", "app.ico")
+        ico_dest = os.path.join(USER_DATA_DIR, "app.ico")
+        
+        if os.path.exists(ico_src):
+            try:
+                shutil.copy2(ico_src, ico_dest)
+            except Exception as e:
+                print(f"Не удалось скопировать иконку: {e}")
+
+        if os.path.exists(ico_dest):
             ini_path = os.path.join(folder, "desktop.ini")
 
             if os.path.exists(ini_path):
                 try:
-                    ctypes.windll.kernel32.SetFileAttributesW(ini_path, 0x80)
+                    ctypes.windll.kernel32.SetFileAttributesW(ini_path, 0x80) # NORMAL
                 except Exception:
                     pass
 
             try:
                 with open(ini_path, "w", encoding="utf-16") as f:
                     f.write("[.ShellClassInfo]\n")
-                    f.write(f"IconResource={ico_path},0\n")
+                    f.write(f'IconResource="{ico_dest}",0\n') 
+                    f.write("ConfirmFileOp=0\n")
 
                 ctypes.windll.kernel32.SetFileAttributesW(ini_path, 0x02 | 0x01)
-                ctypes.windll.kernel32.SetFileAttributesW(folder, 0x04)
+                ctypes.windll.kernel32.SetFileAttributesW(folder, 0x01 | 0x04)
+
+                SHCNE_ASSOCCHANGED = 0x08000000
+                SHCNF_IDLIST = 0x0000
+                ctypes.windll.shell32.SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, None, None)
+                
             except PermissionError:
                 pass
             except Exception as e:
@@ -95,7 +110,6 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{__version__}")
-        self.resize(1200, 800)
         self.is_updating = False
 
         self.data_dir = USER_DATA_DIR
@@ -160,7 +174,7 @@ class MainWindow(QMainWindow):
 
         # Статус-бар для индикации БД
         self.statusBar().show()
-        self.statusBar().setStyleSheet("QStatusBar::item { border: none; }")  # убирает лишнюю линию
+        self.statusBar().setStyleSheet("QStatusBar::item { border: none; }")
         self.db_status_label = QLabel()
         self.statusBar().addPermanentWidget(self.db_status_label)
 
@@ -169,15 +183,20 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(spacer, 1)
 
         self.update_db_status()
-        # Запускаем проверку обновлений через 1.5 секунды после загрузки интерфейса
         QTimer.singleShot(1500, self.check_updates_startup)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if getattr(self, '_first_show', False):
+            self._first_show = False
+            # Принудительно разворачиваем окно при первом показе
+            self.showMaximized()
+            self.setWindowState(Qt.WindowMaximized)
+            
     def check_updates_startup(self):
-        # Берем папку, где лежит база данных
         update_dir = os.path.dirname(self.db_path)
         self.update_checker = UpdateChecker(__version__, update_dir)
         self.update_checker.update_found.connect(self.show_update_prompt)
-        # При автопроверке не показываем ошибки, если папка локальная и нет version.json
         self.update_checker.start()
 
     def show_update_prompt(self, update_data):
@@ -194,28 +213,42 @@ class MainWindow(QMainWindow):
             if not url.startswith("http") and not os.path.isabs(url):
                 url = os.path.join(os.path.dirname(self.db_path), url)
                 
-            temp_dir = tempfile.gettempdir()
-            local_file = download_installer(url, temp_dir)
+            update_dir = os.path.join(USER_DATA_DIR, "updates")
+            os.makedirs(update_dir, exist_ok=True)
             
-            show_message(self, "Обновление", "Установщик успешно скачан. Программа будет закрыта для установки.")
+            from PySide6.QtWidgets import QProgressDialog
             
-            self.is_updating = True  # <--- Сообщаем программе, что мы обновляемся
+            progress = QProgressDialog("Скачивание обновления...", "Отмена", 0, 100, self)
+            progress.setWindowTitle("Обновление")
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setMinimumDuration(0)
+            progress.setValue(0)
+            
+            def update_progress(val):
+                progress.setValue(val)
+                QApplication.processEvents()
+                
+            local_file = download_installer(url, update_dir, update_progress)
+            progress.setValue(100)
+            progress.close()
+            
+            self.is_updating = True
             os.startfile(local_file)
             QApplication.instance().quit()
+            
         except Exception as e:
             show_message(self, "Ошибка", f"Не удалось скачать обновление:\n{e}", is_error=True)
 
     def update_db_status(self):
         if os.path.abspath(self.db_path) == os.path.abspath(DEFAULT_DB_PATH):
-            status, color = "Локальная", "#ff6b6b"   # ярко-красный
+            status, color = "Локальная", "#ff6b6b"
         else:
-            status, color = "Сетевая", "#2ecc71"     # ярко-зелёный
+            status, color = "Сетевая", "#2ecc71"
 
-        # Используем HTML-теги для раскрашивания разных частей текста
         rich_text = f'<span style="color: #ffffff;">База данных:</span> <span style="color: {color}; font-weight: bold;">{status}</span>'
         
         self.db_status_label.setText(rich_text)
-        self.db_status_label.setTextFormat(Qt.RichText) # Включаем поддержку HTML
+        self.db_status_label.setTextFormat(Qt.RichText)
         
         self.db_status_label.setStyleSheet(f"""
             QLabel {{
@@ -234,7 +267,6 @@ class MainWindow(QMainWindow):
             
         new_path = os.path.normpath(new_path)
 
-        # Если путь не совпадает с локальной базой по умолчанию, требуем, чтобы файл существовал
         if new_path != os.path.normpath(DEFAULT_DB_PATH):
             if os.path.isdir(new_path):
                 show_message(self, "Ошибка", f"Вы указали папку, а не файл базы данных:\n{new_path}\n\nПожалуйста, выберите сам файл (обычно он называется cache.db).", is_error=True)
@@ -244,7 +276,6 @@ class MainWindow(QMainWindow):
                 return False
 
         try:
-            # ПЫТАЕМСЯ подключиться к новой базе (до сохранения настроек)
             test_price_manager = PriceManager(db_path=new_path, prices_dir=LOCAL_PRICES_DIR)
             test_search_engine = SearchEngine(test_price_manager.db_path)
             test_report_manager = ReportManager(test_price_manager.db_path)
@@ -252,7 +283,6 @@ class MainWindow(QMainWindow):
             show_message(self, "Ошибка", f"Не удалось открыть базу данных:\n{new_path}\n\nПричина: {e}", is_error=True)
             return False
 
-        # Если ошибок нет - применяем изменения
         self.db_path = new_path
         self.export_config["db_path"] = new_path if new_path != DEFAULT_DB_PATH else ""
         self.save_config()
@@ -325,7 +355,6 @@ class MainWindow(QMainWindow):
             self.report_scr.refresh()
 
     def closeEvent(self, event):
-        # Если это автообновление - закрываемся без лишних вопросов
         if self.is_updating:
             self.order_manager.save_draft(self.draft_path)
             self.save_editing_order_state()
@@ -333,7 +362,6 @@ class MainWindow(QMainWindow):
             event.accept()
             return
 
-        # Обычное закрытие
         if show_confirm(self, "Выход", "Вы уверены, что хотите закрыть программу?\nНесохраненные данные останутся в черновике."):
             self.order_manager.save_draft(self.draft_path)
             self.save_editing_order_state()
@@ -465,7 +493,6 @@ class MainWindow(QMainWindow):
             self.save_config()
 
 if __name__ == "__main__":
-    # 1. Создаем приложение (обязательно ДО создания любых Qt-объектов)
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 11))
 
@@ -475,47 +502,61 @@ if __name__ == "__main__":
     else:
         print("Иконка не найдена:", os.path.join(ASSET_DIR, "ico", "app.ico"))
 
-    # 2. Проверка на повторный запуск
     server_name = "PriceOrder_SingleInstance_Lock"
     socket = QLocalSocket()
     socket.connectToServer(server_name)
     
     if socket.waitForConnected(500):
-        # Если программа уже запущена — отправляем ей сигнал "Покажись" и выходим
         socket.write(b"SHOW_WINDOW")
         socket.waitForBytesWritten(500)
         socket.disconnectFromServer()
         sys.exit(0)
     else:
-        # Если не запущена — создаем сервер для приема будущих сигналов
         server = QLocalServer()
-        server.removeServer(server_name) # Очистка после аварийного закрытия
+        server.removeServer(server_name)
         server.listen(server_name)
 
-    # 3. Проверка пароля (только для первого запуска)
+    config_path = os.path.join(USER_DATA_DIR, "config.json")
+    config = {}
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except Exception:
+            pass
+            
+    login_hash = config.get("login_pwd_hash")
+    if not login_hash:
+        login_hash = hash_password("1111")
+        config["login_pwd_hash"] = login_hash
+        
+    admin_hash = config.get("admin_pwd_hash")
+    if not admin_hash:
+        admin_hash = hash_password("admins")
+        config["admin_pwd_hash"] = admin_hash
+        
+    with open(config_path, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=4)
+        
     pwd = ask_password(None, "Вход в программу", "Введите пароль для доступа:")
     
-    if pwd != "1111":
-        if pwd is not None: # Если не нажато "Отмена"
+    if not pwd or not verify_password(pwd, login_hash):
+        if pwd is not None:
             show_message(None, "Доступ запрещён", "Неверный пароль!", is_error=True)
         sys.exit(0)
 
-    # 4. Запуск основного окна
     create_desktop_shortcut()
 
     window = MainWindow()
 
-    # 5. Функция для обработки сигнала от второго экземпляра
     def handle_new_connection():
         new_sock = server.nextPendingConnection()
         if new_sock:
             new_sock.waitForReadyRead(1000)
             msg = new_sock.readAll().data()
             if msg == b"SHOW_WINDOW":
-                # Разворачиваем окно, если оно было свернуто
                 if window.isMinimized():
                     window.showNormal()
-                # Выводим на передний план
                 window.activateWindow()
                 window.raise_()
             new_sock.disconnectFromServer()
@@ -523,5 +564,16 @@ if __name__ == "__main__":
     # Подключаем обработчик
     server.newConnection.connect(handle_new_connection)
 
-    window.showMaximized()
+    # Получаем размеры экрана
+    screen = app.primaryScreen()
+    if screen:
+        rect = screen.availableGeometry()
+        # Принудительно задаем окну размеры экрана
+        window.setGeometry(rect)
+
+    window.show()
+    
+    # Дополнительная страховка через Windows API (срабатывает уже после отрисовки)
+    QTimer.singleShot(100, lambda: ctypes.windll.user32.ShowWindow(int(window.winId()), 3))
+
     sys.exit(app.exec())

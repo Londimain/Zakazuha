@@ -4,10 +4,10 @@ import datetime
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
                                QPushButton, QHeaderView, QInputDialog, QCheckBox,
                                QDialog, QFormLayout, QGridLayout, QLabel, QFileDialog,
-                               QTreeWidget, QTreeWidgetItem, QApplication)
-from PySide6.QtCore import Qt, QTimer
+                               QTreeWidget, QTreeWidgetItem, QApplication, QDateEdit)
+from PySide6.QtCore import Qt, QTimer, QDate
 from PySide6.QtGui import QColor
-from utils import show_message, show_confirm, ask_password
+from utils import show_message, show_confirm, ask_password, verify_password
 
 class ReportScreen(QWidget):
     def __init__(self, main_app):
@@ -18,11 +18,47 @@ class ReportScreen(QWidget):
 
         layout = QVBoxLayout(self)
 
+        # --- Фильтры поиска и дат ---
+        filter_layout = QHBoxLayout()
+        
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Поиск по организации / контактам / ФИО / примечанию...")
+        self.search_input.textChanged.connect(self._on_search_text_changed)
         self.search_input.returnPressed.connect(self.refresh)
-        layout.addWidget(self.search_input)
+        
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(300)
+        self._search_timer.timeout.connect(self.refresh)
+        
+        filter_layout.addWidget(self.search_input)
+        
+        self.chk_date_filter = QCheckBox("Фильтр по дате")
+        self.chk_date_filter.setChecked(False)
+        self.chk_date_filter.stateChanged.connect(self.on_date_filter_toggled)
+        filter_layout.addWidget(self.chk_date_filter)
+        
+        self.date_from = QDateEdit()
+        self.date_from.setCalendarPopup(True)
+        self.date_from.setDate(QDate.currentDate().addMonths(-1))
+        self.date_from.setDisplayFormat("dd.MM.yyyy")
+        self.date_from.setEnabled(False)
+        self.date_from.dateChanged.connect(lambda: self.refresh() if self.chk_date_filter.isChecked() else None)
+        filter_layout.addWidget(self.date_from)
+        
+        filter_layout.addWidget(QLabel("—"))
+        
+        self.date_to = QDateEdit()
+        self.date_to.setCalendarPopup(True)
+        self.date_to.setDate(QDate.currentDate())
+        self.date_to.setDisplayFormat("dd.MM.yyyy")
+        self.date_to.setEnabled(False)
+        self.date_to.dateChanged.connect(lambda: self.refresh() if self.chk_date_filter.isChecked() else None)
+        filter_layout.addWidget(self.date_to)
 
+        layout.addLayout(filter_layout)
+
+        # --- Кнопки действий ---
         btn_layout = QHBoxLayout()
         btn_open = QPushButton("Открыть в Excel")
         btn_open.clicked.connect(self.open_excel)
@@ -49,6 +85,7 @@ class ReportScreen(QWidget):
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
+        # --- Таблица ---
         self.table = QTreeWidget()
         self.table.setColumnCount(7)
         self.table.setHeaderLabels([
@@ -80,29 +117,32 @@ class ReportScreen(QWidget):
         self.table.mousePressEvent = self.table_mouse_press_event
         self.table.keyPressEvent = self.table_key_press_event
 
+    def on_date_filter_toggled(self):
+        self.date_from.setEnabled(self.chk_date_filter.isChecked())
+        self.date_to.setEnabled(self.chk_date_filter.isChecked())
+        self.refresh()
+
+    def _on_search_text_changed(self):
+        self._search_timer.start()
+
     def _adjust_column_width(self):
         if not hasattr(self, 'table') or self.table.columnCount() == 0:
             return
         header = self.table.header()
 
-        # Прочие колонки — строго по содержимому
         for i in [1, 3, 5, 6]:
             header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
             self.table.resizeColumnToContents(i)
 
-        # Колонка "Организация / Артикул" (2) — интерактивная (можно тянуть мышкой)
         header.setSectionResizeMode(2, QHeaderView.Interactive)
         self.table.resizeColumnToContents(2)
         
-        # Вычисляем минимальную ширину, чтобы заголовок "Организация / Артикул" точно влез
         header_text = self.table.headerItem().text(2)
         header_min = self.table.fontMetrics().horizontalAdvance(header_text) + 40
         
-        # Принудительно ставим эту ширину, если текущая оказалась меньше
         if self.table.columnWidth(2) < header_min:
             self.table.setColumnWidth(2, header_min)
 
-        # Колонка "ФИО / Наименование" (4) съедает всё оставшееся место
         header.setSectionResizeMode(4, QHeaderView.Stretch)
 
     def table_mouse_press_event(self, event):
@@ -126,8 +166,16 @@ class ReportScreen(QWidget):
                     cb.setChecked(False)
 
     def refresh(self):
+        self._search_timer.stop()
         search = self.search_input.text().strip()
-        self.current_data = self.main_app.report_manager.list_orders(search)
+        
+        date_from = None
+        date_to = None
+        if self.chk_date_filter.isChecked():
+            date_from = self.date_from.date().toString("yyyy-MM-dd")
+            date_to = self.date_to.date().toString("yyyy-MM-dd")
+
+        self.current_data = self.main_app.report_manager.list_orders(search, date_from, date_to)
         self.table.clear()
         self._order_nodes = {}
 
@@ -360,10 +408,12 @@ class ReportScreen(QWidget):
             return
 
         row = rows[0]
-        pwd = ask_password(self, "Пароль", "Введите пароль для удаления:")
+        pwd = ask_password(self, "Пароль", "Введите пароль администратора для удаления:")
         if pwd is None:
             return
-        if pwd != "admins":
+            
+        admin_hash = self.main_app.export_config.get("admin_pwd_hash")
+        if not verify_password(pwd, admin_hash):
             show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
             return
 

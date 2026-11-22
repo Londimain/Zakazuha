@@ -106,14 +106,21 @@ class ReportManager:
             conn.execute("DELETE FROM order_items WHERE order_id=?", (order_id,))
             conn.execute("DELETE FROM orders_meta WHERE id=?", (order_id,))
 
-    def list_orders(self, search=""):
+    def list_orders(self, search="", date_from=None, date_to=None):
         sql = ("SELECT id, created_at, organization, contact, category, fio, note, '' "
-               "FROM orders_meta")
+               "FROM orders_meta WHERE 1=1")
         params = []
         if search:
-            sql += " WHERE organization LIKE ? OR contact LIKE ? OR category LIKE ? OR fio LIKE ? OR note LIKE ?"
+            sql += " AND (organization LIKE ? OR contact LIKE ? OR category LIKE ? OR fio LIKE ? OR note LIKE ?)"
             like = f"%{search}%"
-            params = [like, like, like, like, like]
+            params.extend([like, like, like, like, like])
+        if date_from:
+            sql += " AND created_at >= ?"
+            params.append(date_from + "T00:00:00")
+        if date_to:
+            sql += " AND created_at <= ?"
+            params.append(date_to + "T23:59:59")
+            
         sql += " ORDER BY created_at DESC"
         with sqlite3.connect(self.db_path) as conn:
             return conn.execute(sql, params).fetchall()

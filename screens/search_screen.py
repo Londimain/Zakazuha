@@ -311,13 +311,22 @@ class SearchScreen(QWidget):
             return
 
         added = 0
+        merged = 0
         for r in results:
-            self.main_app.order_manager.add_item(r)
-            added += 1
+            # add_item возвращает True (добавлен), False (объединен с дубликатом)
+            if self.main_app.order_manager.add_item(r):
+                added += 1
+            else:
+                merged += 1
 
         self.main_app.order_scr.refresh()
         self.main_app.update_order_badge()
-        show_message(self, "Успех", f"Добавлено товаров по артикулам: {added}")
+        
+        msg = f"Добавлено новых товаров по артикулам: {added}"
+        if merged > 0:
+            msg += f"\nОбъединено с уже существующими (увеличено кол-во): {merged}"
+            
+        show_message(self, "Успех", msg)
 
     def on_source_toggled(self):
         active = [s for s, cb in self.source_checks.items() if cb.isChecked()]
@@ -357,6 +366,7 @@ class SearchScreen(QWidget):
 
     def add_checked(self):
         added = 0
+        merged = 0
         for row_idx in range(self.table.rowCount()):
             widget = self.table.cellWidget(row_idx, 0)
             if widget:
@@ -366,16 +376,24 @@ class SearchScreen(QWidget):
                     if item:
                         full_row = item.data(Qt.UserRole)
                         if full_row:
-                            self.main_app.order_manager.add_item(full_row)
-                            added += 1
+                            # add_item возвращает True (добавлен), False (объединен с дубликатом)
+                            if self.main_app.order_manager.add_item(full_row):
+                                added += 1
+                            else:
+                                merged += 1
 
-        if added == 0:
+        if added == 0 and merged == 0:
             show_message(self, "Внимание", "Поставьте галочки на нужных товарах!", is_error=True)
             return
 
         self.clear_results()
         self.main_app.update_order_badge()
-        show_message(self, "Успех", f"Добавлено товаров: {added}")
+        
+        msg = f"Добавлено новых: {added}"
+        if merged > 0:
+            msg += f"\nОбъединено с уже существующими (увеличено кол-во): {merged}"
+            
+        show_message(self, "Успех", msg)
 
     def clear_results(self):
         self._search_timer.stop()

@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QComboBox, QGroupBox, QPushButton, QGridLayout, 
                                QFrame, QLineEdit, QFileDialog)
 from PySide6.QtGui import QColor
-from utils import get_custom_color, show_message
+from utils import get_custom_color, show_message, verify_password, hash_password, show_input
 
 class SettingsScreen(QWidget):
     def __init__(self, main_app):
@@ -90,6 +90,22 @@ class SettingsScreen(QWidget):
 
         group.setLayout(group_layout)
         layout.addWidget(group)
+        
+        # --- Группа: Безопасность ---
+        sec_group = QGroupBox("Безопасность")
+        sec_layout = QVBoxLayout()
+        
+        btn_change_login_pwd = QPushButton("Сменить пароль на вход")
+        btn_change_login_pwd.clicked.connect(self.change_login_pwd)
+        
+        btn_change_admin_pwd = QPushButton("Сменить пароль администратора")
+        btn_change_admin_pwd.clicked.connect(self.change_admin_pwd)
+        
+        sec_layout.addWidget(btn_change_login_pwd)
+        sec_layout.addWidget(btn_change_admin_pwd)
+        sec_group.setLayout(sec_layout)
+        layout.addWidget(sec_group)
+        
         layout.addStretch()
 
     def browse_db(self):
@@ -144,3 +160,33 @@ class SettingsScreen(QWidget):
             self.main_app.save_config()
             self.main_app.apply_theme("Своя тема")
             self.update_color_btns()
+            
+    def change_login_pwd(self):
+        old_pwd, ok1 = show_input(self, "Смена пароля", "Введите текущий пароль на вход:", echo_password=True)
+        if not ok1: return
+        if not verify_password(old_pwd, self.main_app.export_config.get("login_pwd_hash")):
+            show_message(self, "Ошибка", "Неверный текущий пароль!", is_error=True)
+            return
+            
+        new_pwd, ok2 = show_input(self, "Смена пароля", "Введите новый пароль на вход:", echo_password=True)
+        if not ok2 or not new_pwd: return
+        
+        new_hash = hash_password(new_pwd)
+        self.main_app.export_config["login_pwd_hash"] = new_hash
+        self.main_app.save_config()
+        show_message(self, "Успех", "Пароль на вход успешно изменен.")
+
+    def change_admin_pwd(self):
+        old_pwd, ok1 = show_input(self, "Смена пароля", "Введите текущий пароль администратора:", echo_password=True)
+        if not ok1: return
+        if not verify_password(old_pwd, self.main_app.export_config.get("admin_pwd_hash")):
+            show_message(self, "Ошибка", "Неверный текущий пароль!", is_error=True)
+            return
+            
+        new_pwd, ok2 = show_input(self, "Смена пароля", "Введите новый пароль администратора:", echo_password=True)
+        if not ok2 or not new_pwd: return
+        
+        new_hash = hash_password(new_pwd)
+        self.main_app.export_config["admin_pwd_hash"] = new_hash
+        self.main_app.save_config()
+        show_message(self, "Успех", "Пароль администратора успешно изменен.")

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                                QTableWidgetItem, QHeaderView, QFileDialog, QInputDialog, QLineEdit)
 from PySide6.QtCore import QThread, Signal, QTimer, Qt
 from modules.price_manager import PRICE_SOURCES
-from utils import show_message, show_confirm, ask_password, show_input
+from utils import show_message, show_confirm, ask_password, show_input, verify_password
 
 class UpdateThread(QThread):
     progress = Signal(int)
@@ -105,7 +105,7 @@ class UpdateScreen(QWidget):
             
             # --- Кнопки действий ---
             btn_container = QWidget()
-            btn_container.setStyleSheet("background-color: transparent;") # Исправлен голубой фон
+            btn_container.setStyleSheet("background-color: transparent;")
             btn_layout = QHBoxLayout(btn_container)
             btn_layout.setContentsMargins(2, 2, 2, 2)
             btn_layout.setSpacing(4)
@@ -136,9 +136,11 @@ class UpdateScreen(QWidget):
 
     def add_custom_url(self):
         pwd = ask_password(self, "Пароль", "Введите пароль администратора:")
-        if pwd != "admins":
-            if pwd is not None:
-                show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
+        if pwd is None: return
+        
+        admin_hash = self.main_app.export_config.get("admin_pwd_hash")
+        if not verify_password(pwd, admin_hash):
+            show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
             return
 
         name, ok = show_input(self, "Название", "Введите название для прайса (например, 'Мой поставщик'):")
@@ -159,9 +161,11 @@ class UpdateScreen(QWidget):
 
     def add_custom_file(self):
         pwd = ask_password(self, "Пароль", "Введите пароль администратора:")
-        if pwd != "admins":
-            if pwd is not None:
-                show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
+        if pwd is None: return
+        
+        admin_hash = self.main_app.export_config.get("admin_pwd_hash")
+        if not verify_password(pwd, admin_hash):
+            show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
             return
 
         file_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл прайса", "", "Excel Files (*.xlsx *.xls)")
@@ -183,9 +187,11 @@ class UpdateScreen(QWidget):
     def edit_source(self, key, src_type):
         # ПРОВЕРКА ПАРОЛЯ
         pwd = ask_password(self, "Пароль", "Введите пароль администратора:")
-        if pwd != "admins":
-            if pwd is not None:
-                show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
+        if pwd is None: return
+        
+        admin_hash = self.main_app.export_config.get("admin_pwd_hash")
+        if not verify_password(pwd, admin_hash):
+            show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
             return
 
         if "файл" in src_type.lower():
@@ -209,9 +215,11 @@ class UpdateScreen(QWidget):
     def delete_custom_price(self, key):
         # ПРОВЕРКА ПАРОЛЯ
         pwd = ask_password(self, "Пароль", "Введите пароль администратора:")
-        if pwd != "admins":
-            if pwd is not None:
-                show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
+        if pwd is None: return
+        
+        admin_hash = self.main_app.export_config.get("admin_pwd_hash")
+        if not verify_password(pwd, admin_hash):
+            show_message(self, "Ошибка", "Неверный пароль!", is_error=True)
             return
 
         if not show_confirm(self, "Удаление", f"Удалить прайс '{key}' из базы?\nТовары этого прайса исчезнут из поиска."):
