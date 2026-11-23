@@ -35,13 +35,22 @@ class SettingsScreen(QWidget):
 
         btn_browse_db = QPushButton("Обзор...")
         btn_browse_db.setFixedWidth(100)
+        btn_browse_db.setStyleSheet("""
+            QPushButton { background-color: #e0e0e0; color: black; border: 1px solid #999; padding: 6px; border-radius: 4px; font-weight: bold; }
+            QPushButton:hover { background-color: #d0d0d0; }
+            QPushButton:pressed { background-color: #b0b0b0; }
+        """)
         btn_browse_db.clicked.connect(self.browse_db)
         path_layout.addWidget(btn_browse_db)
         
         db_layout.addLayout(path_layout)
         
         btn_apply_db = QPushButton("Применить путь к базе")
-        btn_apply_db.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; padding: 6px;")
+        btn_apply_db.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         btn_apply_db.clicked.connect(self.apply_db_path)
         db_layout.addWidget(btn_apply_db)
 
@@ -96,9 +105,19 @@ class SettingsScreen(QWidget):
         sec_layout = QVBoxLayout()
         
         btn_change_login_pwd = QPushButton("Сменить пароль на вход")
+        btn_change_login_pwd.setStyleSheet("""
+            QPushButton { background-color: #e0e0e0; color: black; border: 1px solid #999; padding: 6px; border-radius: 4px; font-weight: bold; }
+            QPushButton:hover { background-color: #d0d0d0; }
+            QPushButton:pressed { background-color: #b0b0b0; }
+        """)
         btn_change_login_pwd.clicked.connect(self.change_login_pwd)
         
         btn_change_admin_pwd = QPushButton("Сменить пароль администратора")
+        btn_change_admin_pwd.setStyleSheet("""
+            QPushButton { background-color: #e0e0e0; color: black; border: 1px solid #999; padding: 6px; border-radius: 4px; font-weight: bold; }
+            QPushButton:hover { background-color: #d0d0d0; }
+            QPushButton:pressed { background-color: #b0b0b0; }
+        """)
         btn_change_admin_pwd.clicked.connect(self.change_admin_pwd)
         
         sec_layout.addWidget(btn_change_login_pwd)

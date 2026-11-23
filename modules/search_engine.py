@@ -11,6 +11,7 @@ class SearchEngine:
         params = []
         
         if query:
+            # Используем предварительно сохраненные поля name_lower и article_lower
             sql += " AND (name_lower LIKE ? OR article_lower LIKE ?)"
             like = f"%{query.lower()}%"
             params += [like, like]
@@ -29,6 +30,7 @@ class SearchEngine:
     def search_articles_bulk(self, articles, sources=None):
         if not articles: return []
         placeholders = ",".join("?" * len(articles))
+        # Используем article_lower
         sql = (f"SELECT article, name, price, pack, unit, gtin, source, old_price "
                f"FROM products WHERE article_lower IN ({placeholders})")
         params = [a.lower() for a in articles]

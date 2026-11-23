@@ -35,11 +35,19 @@ class UpdateScreen(QWidget):
         top_btn_layout = QHBoxLayout()
         
         btn_add_url = QPushButton("+ Добавить по ссылке")
-        btn_add_url.setStyleSheet("background-color: #5cb85c; color: black; font-weight: bold; padding: 6px;")
+        btn_add_url.setStyleSheet("""
+            QPushButton { background-color: #5cb85c; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #449d44; }
+            QPushButton:pressed { background-color: #398439; }
+        """)
         btn_add_url.clicked.connect(self.add_custom_url)
         
         btn_add_file = QPushButton("+ Добавить из файла")
-        btn_add_file.setStyleSheet("background-color: #5cb85c; color: black; font-weight: bold; padding: 6px;")
+        btn_add_file.setStyleSheet("""
+            QPushButton { background-color: #5cb85c; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #449d44; }
+            QPushButton:pressed { background-color: #398439; }
+        """)
         btn_add_file.clicked.connect(self.add_custom_file)
         
         top_btn_layout.addWidget(btn_add_url)
@@ -112,20 +120,32 @@ class UpdateScreen(QWidget):
             
             btn_update = QPushButton("Обновить")
             btn_update.setFixedSize(85, 28)
-            btn_update.setStyleSheet("background-color: #e0e0e0; color: black; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
+            btn_update.setStyleSheet("""
+                QPushButton { background-color: #e0e0e0; color: black; border: 1px solid #999; border-radius: 4px; font-weight: bold; }
+                QPushButton:hover { background-color: #d0d0d0; }
+                QPushButton:pressed { background-color: #b0b0b0; }
+            """)
             btn_update.clicked.connect(lambda checked, k=key: self.update_price(k))
             self.buttons[key] = btn_update
             btn_layout.addWidget(btn_update)
             
             btn_edit = QPushButton("Изменить")
             btn_edit.setFixedSize(85, 28)
-            btn_edit.setStyleSheet("background-color: #f0ad4e; color: black; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
+            btn_edit.setStyleSheet("""
+                QPushButton { background-color: #f0ad4e; color: black; border: 1px solid #999; border-radius: 4px; font-weight: bold; }
+                QPushButton:hover { background-color: #ec971f; }
+                QPushButton:pressed { background-color: #d58512; }
+            """)
             btn_edit.clicked.connect(lambda checked, k=key, t=src_type: self.edit_source(k, t))
             btn_layout.addWidget(btn_edit)
             
             btn_del = QPushButton("Удалить")
             btn_del.setFixedSize(85, 28)
-            btn_del.setStyleSheet("background-color: #d9534f; color: white; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
+            btn_del.setStyleSheet("""
+                QPushButton { background-color: #d9534f; color: white; border: 1px solid #999; border-radius: 4px; font-weight: bold; }
+                QPushButton:hover { background-color: #c9302c; }
+                QPushButton:pressed { background-color: #ac2925; }
+            """)
             btn_del.clicked.connect(lambda checked, k=key: self.delete_custom_price(k))
             btn_layout.addWidget(btn_del)
                 
@@ -235,8 +255,9 @@ class UpdateScreen(QWidget):
         for k, btn in self.buttons.items():
             btn.setEnabled(False)
             if k == key:
-                btn.setText("Загрузка...")
-                btn.setStyleSheet("background-color: #f0ad4e; color: black; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
+                btn.setText("Загрузка")
+                # ИЗМЕНЕНО: color: white -> color: black
+                btn.setStyleSheet("background-color: #5cb85c; color: black; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
         
         self.progress.setValue(0)
         self.thread = UpdateThread(self.main_app.price_manager, key)
@@ -249,9 +270,11 @@ class UpdateScreen(QWidget):
         if btn:
             if ok:
                 btn.setText("Готово")
-                btn.setStyleSheet("background-color: #5cb85c; color: white; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
+                # ИЗМЕНЕНО: color: white -> color: black
+                btn.setStyleSheet("background-color: #5cb85c; color: black; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
             else:
                 btn.setText("Ошибка")
+                # Здесь оставляем белый, так как на красном фоне он читается лучше
                 btn.setStyleSheet("background-color: #d9534f; color: white; border: 1px solid #999; border-radius: 4px; font-weight: bold;")
         
         self.progress.setValue(100 if ok else 0)

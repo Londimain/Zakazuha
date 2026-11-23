@@ -1,11 +1,13 @@
+# screens/order_screen.py
 import os
 import datetime
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                                QTableWidget, QTableWidgetItem, QHeaderView, QCheckBox,
-                               QDialog, QFormLayout, QLineEdit, QLabel, QAbstractItemView)
+                               QDialog, QFormLayout, QLineEdit, QLabel, QAbstractItemView,
+                               QComboBox, QTreeWidget, QTreeWidgetItem, QMessageBox)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush
-from utils import show_message, show_confirm
+from utils import show_message, show_confirm, ask_password, verify_password
 
 class CheckBoxHeader(QHeaderView):
     clicked_all = Signal(bool)
@@ -53,7 +55,6 @@ class DraggableOrderTable(QTableWidget):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDropIndicatorShown(True)
-        # Оставляем SelectRows для Drag & Drop, но без визуального выделения
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection) 
 
@@ -74,31 +75,52 @@ class OrderScreen(QWidget):
         super().__init__()
         self.main_app = main_app
         self.loading_table = False
+        self.hover_row = -1
         
         layout = QVBoxLayout(self)
         btn_layout = QHBoxLayout()
         
         btn_manual = QPushButton("+ Добавить")
-        btn_manual.setStyleSheet("background-color: #5cb85c; color: black; font-weight: bold;")
+        btn_manual.setStyleSheet("""
+            QPushButton { background-color: #5cb85c; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #449d44; }
+            QPushButton:pressed { background-color: #398439; }
+        """)
         btn_manual.clicked.connect(self.add_manual_item)
         
         btn_edit = QPushButton("Редактировать")
-        btn_edit.setStyleSheet("background-color: #f0ad4e; color: black; font-weight: bold;")
+        btn_edit.setStyleSheet("""
+            QPushButton { background-color: #f0ad4e; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #ec971f; }
+            QPushButton:pressed { background-color: #d58512; }
+        """)
         btn_edit.clicked.connect(self.edit_item)
         
         btn_del_selected = QPushButton("Удалить выбранные")
-        btn_del_selected.setStyleSheet("background-color: #d9534f; color: black; font-weight: bold;")
+        btn_del_selected.setStyleSheet("""
+            QPushButton { background-color: #d9534f; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #c9302c; }
+            QPushButton:pressed { background-color: #ac2925; }
+        """)
         btn_del_selected.clicked.connect(self.delete_selected)
         
         btn_clear = QPushButton("Очистить всё")
         btn_clear.clicked.connect(self.clear_order)
         
         self.btn_save = QPushButton("Создать отчёт")
-        self.btn_save.setStyleSheet("background-color: #0078D7; color: black; font-weight: bold;")
+        self.btn_save.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         self.btn_save.clicked.connect(self.save_order)
         
         self.btn_cancel_edit = QPushButton("Отмена")
-        self.btn_cancel_edit.setStyleSheet("background-color: #d9534f; color: white; font-weight: bold;")
+        self.btn_cancel_edit.setStyleSheet("""
+            QPushButton { background-color: #d9534f; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #c9302c; }
+            QPushButton:pressed { background-color: #ac2925; }
+        """)
         self.btn_cancel_edit.clicked.connect(self.cancel_edit)
         self.btn_cancel_edit.setVisible(False)
         
@@ -112,8 +134,8 @@ class OrderScreen(QWidget):
         layout.addLayout(btn_layout)
 
         self.table = DraggableOrderTable()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["", "№", "Артикул", "Наименование", "Кол-во"])
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["", "№", "Артикул", "Наименование", "Кол-во", "Назначение"])
         self.table.setAlternatingRowColors(False)
         
         self.header = CheckBoxHeader(Qt.Horizontal, self.table)
@@ -126,6 +148,7 @@ class OrderScreen(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
         
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
@@ -141,6 +164,12 @@ class OrderScreen(QWidget):
         self.table.mousePressEvent = self.table_mouse_press_event
         self.table.keyPressEvent = self.table_key_press_event
 
+        # --- ПОДСВЕТКА СТРОК ПРИ НАВЕДЕНИИ ---
+        self.table.setMouseTracking(True)
+        self.table.cellEntered.connect(self.on_cell_entered)
+        self.table.leaveEvent = self.table_leave_event
+        self.table.mouseMoveEvent = self.table_mouse_move_event
+
     def handle_row_move(self, source, target):
         items = self.main_app.order_manager.items
         if 0 <= source < len(items) and 0 <= target < len(items):
@@ -148,7 +177,68 @@ class OrderScreen(QWidget):
             items.insert(target, item)
             self.main_app.order_manager.save_draft(self.main_app.draft_path)
             self.refresh()
+    # --- ПОДСВЕТКА СТРОК ПРИ НАВЕДЕНИИ ---
+    def on_cell_entered(self, row, col):
+        if self.hover_row == row:
+            return
+        if self.hover_row != -1:
+            self.restore_row_color(self.hover_row)
+        self.hover_row = row
+        self.apply_hover_color(row)
 
+    def table_leave_event(self, event):
+        if self.hover_row != -1:
+            self.restore_row_color(self.hover_row)
+            self.hover_row = -1
+        QTableWidget.leaveEvent(self.table, event)
+
+    def table_mouse_move_event(self, event):
+        index = self.table.indexAt(event.pos())
+        if not index.isValid():
+            if self.hover_row != -1:
+                self.restore_row_color(self.hover_row)
+                self.hover_row = -1
+        QTableWidget.mouseMoveEvent(self.table, event)
+
+    def restore_row_color(self, row):
+        if row < 0 or row >= self.table.rowCount():
+            return
+        for c in range(self.table.columnCount()):
+            if c in (0, 5):
+                w = self.table.cellWidget(row, c)
+                if w:
+                    w.setStyleSheet("background-color: transparent;")
+                    # Если это колонка "Назначение", возвращаем цвет текста темы (сбрасываем стиль)
+                    if c == 5:
+                        lbl = w.findChild(QLabel)
+                        if lbl:
+                            lbl.setStyleSheet("background-color: transparent;")
+            else:
+                item = self.table.item(row, c)
+                if item:
+                    item.setData(Qt.BackgroundRole, None)
+                    item.setData(Qt.ForegroundRole, None)
+
+    def apply_hover_color(self, row):
+        if row < 0 or row >= self.table.rowCount():
+            return
+        bg = QColor("#e2eaf1")
+        for c in range(self.table.columnCount()):
+            if c in (0, 5):
+                w = self.table.cellWidget(row, c)
+                if w:
+                    w.setStyleSheet(f"background-color: {bg.name()};")
+                    # Принудительно делаем текст в "Назначении" черным на время наведения
+                    if c == 5:
+                        lbl = w.findChild(QLabel)
+                        if lbl:
+                            lbl.setStyleSheet(f"background-color: transparent; color: black;")
+            else:
+                item = self.table.item(row, c)
+                if item:
+                    item.setData(Qt.BackgroundRole, bg)
+                    item.setData(Qt.ForegroundRole, QColor("black"))
+                    
     def update_header_checkbox_state(self):
         if self.table.rowCount() == 0:
             self.header.isOn = False
@@ -187,13 +277,14 @@ class OrderScreen(QWidget):
             QTableWidget.keyPressEvent(self.table, event)
 
     def table_mouse_press_event(self, event):
-        # Снимаем выделение при клике правой кнопкой или в пустую область
         if event.button() == Qt.RightButton:
             self.table.clearSelection()
+            self.table.setCurrentItem(None)
             return
         index = self.table.indexAt(event.pos())
         if not index.isValid():
             self.table.clearSelection()
+            self.table.setCurrentItem(None)
         QTableWidget.mousePressEvent(self.table, event)
 
     def clear_all_checks(self):
@@ -208,6 +299,7 @@ class OrderScreen(QWidget):
 
     def refresh(self):
         self.loading_table = True
+        self.hover_row = -1
         self.table.setSortingEnabled(False)
         self.header.isOn = False
         self.header.viewport().update()
@@ -254,6 +346,26 @@ class OrderScreen(QWidget):
             item_qty = QTableWidgetItem(format_val(item.get("qty")))
             item_qty.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(i, 4, item_qty)
+            
+            # Колонка "Назначение"
+            purpose_widget = QWidget()
+            purpose_widget.setStyleSheet("background-color: transparent;")
+            purpose_layout = QHBoxLayout(purpose_widget)
+            purpose_layout.setContentsMargins(2, 2, 2, 2)
+            purpose_layout.setSpacing(5)
+            
+            purpose_lbl = QLabel(item.get("purpose", ""))
+            purpose_lbl.setStyleSheet("background-color: transparent;")
+            purpose_lbl.setWordWrap(False)
+            
+            btn_purpose = QPushButton("...")
+            btn_purpose.setFixedSize(30, 25)
+            btn_purpose.setStyleSheet("background-color: #e0e0e0; color: black; font-weight: bold;")
+            btn_purpose.clicked.connect(lambda checked, r=i: self.open_purpose_dialog(r))
+            
+            purpose_layout.addWidget(purpose_lbl, 1)
+            purpose_layout.addWidget(btn_purpose, 0)
+            self.table.setCellWidget(i, 5, purpose_widget)
             
         self.loading_table = False
         self.table.setSortingEnabled(False)
@@ -323,7 +435,7 @@ class OrderScreen(QWidget):
         self.main_app.order_manager.clear()
         self.main_app.order_manager.save_draft(self.main_app.draft_path)
         self.refresh()
-        
+
     def add_manual_item(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("Добавить товар вручную")
@@ -333,14 +445,20 @@ class OrderScreen(QWidget):
         f_art = QLineEdit()
         f_name = QLineEdit()
         f_qty = QLineEdit("1")
+        f_purpose = QLineEdit()
 
         form.addRow("Артикул:", f_art)
         form.addRow("Наименование:", f_name)
         form.addRow("Кол-во:", f_qty)
+        form.addRow("Назначение:", f_purpose)
 
         btn_layout = QHBoxLayout()
         btn_ok = QPushButton("Добавить")
-        btn_ok.setStyleSheet("background-color: #0078D7; color: black; font-weight: bold; padding: 6px;")
+        btn_ok.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         btn_ok.clicked.connect(dialog.accept)
         btn_cancel = QPushButton("Отмена")
         btn_cancel.setStyleSheet("background-color: #e0e0e0; color: black; font-weight: bold; padding: 6px;")
@@ -356,6 +474,7 @@ class OrderScreen(QWidget):
             new_item = [f_art.text().strip(), f_name.text().strip(), "", "", "", "", "Вручную"]
             self.main_app.order_manager.add_item(new_item)
             self.main_app.order_manager.items[-1]["qty"] = f_qty.text().strip()
+            self.main_app.order_manager.items[-1]["purpose"] = f_purpose.text().strip()
             self.main_app.order_manager.save_draft(self.main_app.draft_path)
             self.refresh()
 
@@ -386,14 +505,20 @@ class OrderScreen(QWidget):
         f_art = QLineEdit(item_data.get("article", ""))
         f_name = QLineEdit(item_data.get("name", ""))
         f_qty = QLineEdit(str(item_data.get("qty", "")))
+        f_purpose = QLineEdit(item_data.get("purpose", ""))
 
         form.addRow("Артикул:", f_art)
         form.addRow("Наименование:", f_name)
         form.addRow("Кол-во:", f_qty)
+        form.addRow("Назначение:", f_purpose)
 
         btn_layout = QHBoxLayout()
         btn_ok = QPushButton("Сохранить")
-        btn_ok.setStyleSheet("background-color: #0078D7; color: black; font-weight: bold; padding: 6px;")
+        btn_ok.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         btn_ok.clicked.connect(dialog.accept)
         btn_cancel = QPushButton("Отмена")
         btn_cancel.setStyleSheet("background-color: #e0e0e0; color: black; font-weight: bold; padding: 6px;")
@@ -409,8 +534,165 @@ class OrderScreen(QWidget):
             self.main_app.order_manager.items[selected_row]["article"] = f_art.text().strip()
             self.main_app.order_manager.items[selected_row]["name"] = f_name.text().strip()
             self.main_app.order_manager.items[selected_row]["qty"] = f_qty.text().strip()
+            self.main_app.order_manager.items[selected_row]["purpose"] = f_purpose.text().strip()
             self.main_app.order_manager.save_draft(self.main_app.draft_path)
             self.refresh()
+
+    def ask_purpose_name(self, title, prompt, default=""):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setMinimumWidth(320)
+        
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(prompt))
+        
+        inp = QLineEdit(default)
+        layout.addWidget(inp)
+        
+        btn_layout = QHBoxLayout()
+        btn_ok = QPushButton("OK")
+        btn_cancel = QPushButton("Отмена")
+        
+        btn_ok.setFixedSize(80, 30)
+        btn_cancel.setFixedSize(80, 30)
+        btn_ok.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px;")
+        btn_cancel.setStyleSheet("background-color: #e0e0e0; color: black; font-weight: bold; border-radius: 4px;")
+        
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_ok)
+        btn_layout.addWidget(btn_cancel)
+        btn_layout.addStretch()
+        
+        layout.addLayout(btn_layout)
+        
+        btn_ok.clicked.connect(dialog.accept)
+        btn_cancel.clicked.connect(dialog.reject)
+        btn_ok.setDefault(True)
+        
+        if dialog.exec() == QDialog.Accepted:
+            return inp.text().strip(), True
+        return "", False
+
+    def open_purpose_dialog(self, row_idx):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Справочник назначений")
+        dialog.setMinimumSize(400, 500)
+        layout = QVBoxLayout(dialog)
+
+        tree = QTreeWidget()
+        tree.setHeaderLabels(["Название"])
+        tree.setStyleSheet("""
+            QTreeWidget {
+                background-color: white;
+                color: black;
+            }
+            QTreeWidget::item:selected {
+                background-color: #cce5ff;
+                color: black;
+            }
+        """)
+        layout.addWidget(tree)
+
+        def load_tree():
+            tree.clear()
+            purposes = self.main_app.report_manager.get_purposes()
+            nodes = {}
+            for pid, name, parent_id in purposes:
+                node = QTreeWidgetItem([name])
+                node.setData(0, Qt.UserRole, pid)
+                nodes[pid] = node
+                if parent_id and parent_id in nodes:
+                    nodes[parent_id].addChild(node)
+                else:
+                    tree.addTopLevelItem(node)
+
+        load_tree()
+
+        btn_layout = QHBoxLayout()
+        btn_add = QPushButton("Добавить")
+        btn_add.setStyleSheet("""
+            QPushButton { background-color: #5cb85c; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #449d44; }
+            QPushButton:pressed { background-color: #398439; }
+        """)
+        btn_edit = QPushButton("Изменить")
+        btn_edit.setStyleSheet("""
+            QPushButton { background-color: #f0ad4e; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #ec971f; }
+            QPushButton:pressed { background-color: #d58512; }
+        """)
+        btn_del = QPushButton("Удалить")
+        btn_del.setStyleSheet("""
+            QPushButton { background-color: #d9534f; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #c9302c; }
+            QPushButton:pressed { background-color: #ac2925; }
+        """)
+
+        btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(btn_edit)
+        btn_layout.addWidget(btn_del)
+        layout.addLayout(btn_layout)
+
+        def add_purpose():
+            name, ok = self.ask_purpose_name("Добавить", "Название назначения:")
+            if ok and name:
+                parent_item = tree.currentItem()
+                parent_id = parent_item.data(0, Qt.UserRole) if parent_item else None
+                if self.main_app.report_manager.add_purpose(name, parent_id):
+                    load_tree()
+                else:
+                    show_message(dialog, "Ошибка", "Такое назначение уже существует!", is_error=True)
+
+        def edit_purpose():
+            item = tree.currentItem()
+            if not item: return
+            pid = item.data(0, Qt.UserRole)
+            old_name = item.text(0)
+            
+            pwd = ask_password(dialog, "Пароль", "Введите пароль администратора:")
+            if not pwd or not verify_password(pwd, self.main_app.export_config.get("admin_pwd_hash")):
+                return
+                
+            new_name, ok = self.ask_purpose_name("Изменить", "Новое название:", old_name)
+            if ok and new_name:
+                if self.main_app.report_manager.update_purpose(pid, new_name):
+                    load_tree()
+                else:
+                    show_message(dialog, "Ошибка", "Назначение с таким именем уже существует!", is_error=True)
+
+        def del_purpose():
+            item = tree.currentItem()
+            if not item: return
+            pid = item.data(0, Qt.UserRole)
+            
+            pwd = ask_password(dialog, "Пароль", "Введите пароль администратора:")
+            if not pwd or not verify_password(pwd, self.main_app.export_config.get("admin_pwd_hash")):
+                return
+            
+            if show_confirm(dialog, "Удаление", "Удалить это назначение?"):
+                self.main_app.report_manager.delete_purpose(pid)
+                load_tree()
+
+        btn_add.clicked.connect(add_purpose)
+        btn_edit.clicked.connect(edit_purpose)
+        btn_del.clicked.connect(del_purpose)
+
+        def on_select():
+            item = tree.currentItem()
+            if item:
+                self.main_app.order_manager.items[row_idx]["purpose"] = item.text(0)
+                self.main_app.order_manager.save_draft(self.main_app.draft_path)
+                self.refresh()
+                dialog.accept()
+
+        tree.itemDoubleClicked.connect(on_select)
+        
+        btn_select = QPushButton("Выбрать")
+        btn_select.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; padding: 8px;")
+        btn_select.clicked.connect(on_select)
+        layout.addWidget(btn_select)
+
+        dialog.exec()
 
     def save_order(self):
         if not self.main_app.order_manager.items:
@@ -423,28 +705,45 @@ class OrderScreen(QWidget):
         form = QFormLayout(dialog)
 
         f_org = QLineEdit()
-        f_ctc = QLineEdit()
         f_fio = QLineEdit()
-        f_cat = QLineEdit()
+        f_phone = QLineEdit()
+        f_email = QLineEdit()
+        
+        f_month = QComboBox()
+        f_month.addItems(["", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"])
+        
         f_note = QLineEdit()
+        
+        f_status = QComboBox()
+        f_status.addItems(["Ожидание", "Обработка", "Выполнено"])
 
         if self.main_app.editing_order:
             meta = self.main_app.editing_order["meta"]
             f_org.setText(meta.get("organization", ""))
-            f_ctc.setText(meta.get("contact", ""))
             f_fio.setText(meta.get("fio", ""))
-            f_cat.setText(meta.get("category", ""))
+            f_phone.setText(meta.get("phone", ""))
+            f_email.setText(meta.get("email", ""))
+            m_idx = f_month.findText(meta.get("month", ""))
+            if m_idx >= 0: f_month.setCurrentIndex(m_idx)
             f_note.setText(meta.get("note", ""))
+            s_idx = f_status.findText(meta.get("status", "Ожидание"))
+            if s_idx >= 0: f_status.setCurrentIndex(s_idx)
 
-        form.addRow("Организация:", f_org)
-        form.addRow("Контакты:", f_ctc)
+        form.addRow("Организация (обязательно):", f_org)
         form.addRow("ФИО:", f_fio)
-        form.addRow("Категория:", f_cat)
+        form.addRow("Контакт: № телефона", f_phone)
+        form.addRow("Контакт: @ email", f_email)
+        form.addRow("Месяц:", f_month)
         form.addRow("Примечание:", f_note)
+        form.addRow("Статус отчёта:", f_status)
 
         btn_layout = QHBoxLayout()
         btn_ok = QPushButton("Сохранить")
-        btn_ok.setStyleSheet("background-color: #0078D7; color: black; font-weight: bold; padding: 6px;")
+        btn_ok.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         btn_ok.clicked.connect(dialog.accept)
         btn_cancel = QPushButton("Отмена")
         btn_cancel.setStyleSheet("background-color: #e0e0e0; color: black; font-weight: bold; padding: 6px;")
@@ -457,44 +756,37 @@ class OrderScreen(QWidget):
         form.addRow(btn_layout)
 
         if dialog.exec() == QDialog.Accepted:
+            if not f_org.text().strip():
+                show_message(self, "Внимание", "Поле 'Организация' обязательно для заполнения!", is_error=True)
+                return
+
             new_meta = {
-                "organization": f_org.text().strip(), "contact": f_ctc.text().strip(),
-                "fio": f_fio.text().strip(), "category": f_cat.text().strip(),
+                "organization": f_org.text().strip(), 
+                "fio": f_fio.text().strip(),
+                "phone": f_phone.text().strip(),
+                "email": f_email.text().strip(),
+                "month": f_month.currentText(),
                 "note": f_note.text().strip(),
+                "status": f_status.currentText(),
+                "contact": "" 
             }
             
-            items_to_save, items_to_keep, any_checked = [], [], False
-            for i, item in enumerate(self.main_app.order_manager.items):
-                widget = self.table.cellWidget(i, 0)
-                cb = widget.findChild(QCheckBox) if widget else None
-                if cb and cb.isChecked():
-                    any_checked = True
-                    items_to_save.append(item)
-                else:
-                    items_to_keep.append(item)
-            
-            if not any_checked:
-                items_to_save = self.main_app.order_manager.items.copy()
-                items_to_keep = []
-                
-            if not items_to_save:
-                show_message(self, "Внимание", "Нет товаров для сохранения!", is_error=True)
-                return
+            # Теперь сохраняются ВСЕ товары, независимо от галочек
+            items_to_save = self.main_app.order_manager.items.copy()
             
             if self.main_app.editing_order:
                 order_id = self.main_app.editing_order["id"]
                 self.main_app.report_manager.update_order(order_id, new_meta, items_to_save)
-                show_message(self, "Успех", "Отчёт успешно обновлён!\nНевыделенные товары остались в заявке.")
+                show_message(self, "Успех", "Отчёт успешно обновлён!")
                 self.main_app.editing_order = None
                 self.main_app.save_editing_order_state()
             else:
                 self.main_app.report_manager.add_order(new_meta, items_to_save)
-                show_message(self, "Успех", "Отчёт успешно создан!\nНевыделенные товары остались в заявке.")
+                show_message(self, "Успех", "Отчёт успешно создан!")
             
-            self.main_app.order_manager.items = items_to_keep
+            self.main_app.order_manager.items = []
             self.main_app.order_manager.save_draft(self.main_app.draft_path)
             self.refresh()
             
-            # Переходим на страницу отчётов и обновляем список
             self.main_app.tabs.setCurrentWidget(self.main_app.report_scr)
             self.main_app.report_scr.refresh()

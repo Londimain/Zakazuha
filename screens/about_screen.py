@@ -40,19 +40,20 @@ class AboutScreen(QWidget):
         btn_control_layout.addStretch()
         
         self.btn_force_update = QPushButton("Проверить обновления")
-        self.btn_force_update.setStyleSheet(
-            "background-color: #0078D7; color: white; font-weight: bold; "
-            "padding: 6px 15px; border-radius: 6px; font-size: 13px;"
-        )
+        self.btn_force_update.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; padding: 6px 15px; border-radius: 6px; font-size: 13px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         self.btn_force_update.setCursor(Qt.PointingHandCursor)
         self.btn_force_update.clicked.connect(self.force_check_update)
         
         self.btn_changelog = QPushButton("История обновлений")
-        # ИЗМЕНЕНО: Цвет кнопки теперь синий, как у кнопки проверки
-        self.btn_changelog.setStyleSheet(
-            "background-color: #0078D7; color: white; font-weight: bold; "
-            "padding: 6px 15px; border-radius: 6px; font-size: 13px;"
-        )
+        self.btn_changelog.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; padding: 6px 15px; border-radius: 6px; font-size: 13px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         self.btn_changelog.setCursor(Qt.PointingHandCursor)
         self.btn_changelog.clicked.connect(self.show_changelog)
         
@@ -78,12 +79,13 @@ class AboutScreen(QWidget):
             "• <b>Умный поиск:</b> молниеносный поиск по названию и артикулу по всем загруженным базам, поддержка вставки списков артикулов из Excel.<br>"
             "• <b>Защита от дубликатов:</b> при добавлении товара, который уже есть в заявке, программа не создает новую строку, а увеличивает количество.<br>"
             "• <b>Свои прайсы:</b> добавление собственных прайс-листов по прямой ссылке (URL) или из локального файла.<br>"
-            "• <b>Гибкая заявка:</b> ручное редактирование количества, перетаскивание строк мышкой для изменения порядка, умная защита от перезаписи данных при редактировании отчётов.<br>"
-            "• <b>Мгновенный поиск в отчётах:</b> поиск по базе сохраненных заявок работает сразу при вводе текста, без нажатия Enter. Доступен фильтр по диапазону дат.<br>"
+            "• <b>Гибкая заявка:</b> ручное редактирование количества, перетаскивание строк мышкой для изменения порядка.<br>"
+            "• <b>Справочник назначений:</b> древовидная структура назначений товаров (с защитой изменений паролем администратора).<br>"
+            "• <b>Мгновенный поиск в отчётах:</b> поиск по базе сохраненных заявок работает сразу при вводе текста. Доступен фильтр по диапазону дат.<br>"
+            "• <b>Умные отчёты:</b> сохранение полной информации (ФИО, телефон, email, месяц, статус). Возможность редактировать шапку, состав товаров и объединять несколько отчётов в сводную ведомость.<br>"
             "• <b>Настройка Excel:</b> выбор конкретных колонок и шапки для выгрузки в файл.<br>"
             "• <b>Сохранение состояния:</b> незакрытая заявка (черновик) и состояние редактирования отчёта автоматически сохраняются при выходе и восстанавливаются при запуске.<br>"
-            "• <b>База отчётов:</b> все созданные заявки хранятся в базе данных. Их можно просматривать, дополнять товарами, удалять и объединять в сводные ведомости.<br>"
-            "• <b>Безопасность:</b> пароли на вход и в админ-панель хранятся в виде криптографических хешей (PBKDF2). В настройках можно безопасно сменить пароли. Запрещен запуск двух копий одновременно.<br>"
+            "• <b>Безопасность:</b> пароли на вход и в админ-панель хранятся в виде криптографических хешей (PBKDF2). Запрещен запуск двух копий одновременно.<br>"
             "• <b>Автообновление:</b> программа сама проверяет наличие новых версий в сетевой папке и предлагает обновиться в один клик.<br>"
             "• <b>Темы оформления:</b> 3 встроенные темы и полностью настраиваемая «Своя тема».<br>"
             "• <b>Сетевая работа:</b> в «Настройках» можно указать путь к общей базе данных для работы в команде."
@@ -98,10 +100,10 @@ class AboutScreen(QWidget):
 
         workflow_text = QLabel(
             "<b>0. Запуск:</b> введите пароль для доступа к программе.<br>"
-            "<b>1. Прайсы:</b> настройте источники (включая свои) и нажмите «Обн.» для загрузки актуальных цен.<br>"
+            "<b>1. Прайсы:</b> настройте источники (включая свои) и нажмите «Обновить» для загрузки актуальных цен.<br>"
             "<b>2. Поиск:</b> введите название или артикул, отметьте нужные галочками и нажмите «Добавить отмеченные».<br>"
-            "<b>3. Заявка:</b> проверьте список, измените количество, перетащите строки для сортировки.<br>"
-            "<b>4. Отчёт:</b> нажмите «Создать отчёт». Заявка сохранится в базу и появится на вкладке «Отчёты». При необходимости её можно открыть для редактирования."
+            "<b>3. Заявка:</b> проверьте список, измените количество, перетащите строки для сортировки. При необходимости выберите «Назначение» из справочника.<br>"
+            "<b>4. Отчёт:</b> нажмите «Создать отчёт». Заполните данные по организации, статус и контакты. Заявка сохранится в базу и появится на вкладке «Отчёты»."
         )
         workflow_text.setWordWrap(True)
         workflow_text.setStyleSheet("font-size: 14px; line-height: 150%;")
@@ -117,10 +119,11 @@ class AboutScreen(QWidget):
         footer.setStyleSheet("color: gray; font-size: 12px; margin-top: 20px;")
 
         btn_repo = QPushButton("Перейти в репозиторий (GitHub)")
-        btn_repo.setStyleSheet(
-            "background-color: #24292e; color: white; font-weight: bold; "
-            "padding: 10px 20px; border-radius: 6px; font-size: 14px;"
-        )
+        btn_repo.setStyleSheet("""
+            QPushButton { background-color: #24292e; color: white; font-weight: bold; padding: 10px 20px; border-radius: 6px; font-size: 14px; }
+            QPushButton:hover { background-color: #1b1f23; }
+            QPushButton:pressed { background-color: #0d1117; }
+        """)
         btn_repo.setCursor(Qt.PointingHandCursor)
         btn_repo.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(REPO_URL)))
 
@@ -218,7 +221,11 @@ class AboutScreen(QWidget):
         layout.addWidget(browser)
         
         btn_close = QPushButton("Закрыть")
-        btn_close.setStyleSheet("background-color: #0078D7; color: white; font-weight: bold; padding: 8px 20px; border-radius: 4px;")
+        btn_close.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; padding: 8px 20px; border-radius: 4px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         btn_close.clicked.connect(dialog.accept)
         layout.addWidget(btn_close, 0, Qt.AlignCenter)
         

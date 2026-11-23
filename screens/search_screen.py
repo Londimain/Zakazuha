@@ -62,17 +62,38 @@ class SearchScreen(QWidget):
         self.refresh_sources()
 
         btn_layout = QHBoxLayout()
+        
         btn_search = QPushButton("Найти")
+        btn_search.setStyleSheet("""
+            QPushButton { background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #005a9e; }
+            QPushButton:pressed { background-color: #004578; }
+        """)
         btn_search.clicked.connect(self.do_search)
         
         btn_paste = QPushButton("Вставить артикулы")
-        btn_paste.setStyleSheet("background-color: #f0ad4e; color: black; font-weight: bold;")
+        btn_paste.setStyleSheet("""
+            QPushButton { background-color: #f0ad4e; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #ec971f; }
+            QPushButton:pressed { background-color: #d58512; }
+        """)
         btn_paste.setToolTip("Скопируйте список артикулов из Excel (столбиком) и нажмите сюда.")
         btn_paste.clicked.connect(self.import_from_clipboard)
         
         btn_add = QPushButton("Добавить отмеченные")
+        btn_add.setStyleSheet("""
+            QPushButton { background-color: #5cb85c; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #449d44; }
+            QPushButton:pressed { background-color: #398439; }
+        """)
         btn_add.clicked.connect(self.add_checked)
+        
         btn_clear = QPushButton("Очистить список")
+        btn_clear.setStyleSheet("""
+            QPushButton { background-color: #d9534f; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton:hover { background-color: #c9302c; }
+            QPushButton:pressed { background-color: #ac2925; }
+        """)
         btn_clear.clicked.connect(self.clear_results)
         
         btn_layout.addWidget(btn_search)
@@ -107,6 +128,19 @@ class SearchScreen(QWidget):
 
         self.table.keyPressEvent = self.table_key_press_event
         self.table.mousePressEvent = self.table_mouse_press_event
+        
+        # ДОБАВЛЯЕМ ОТСЛЕЖИВАНИЕ КУРСОРА МЫШИ ДЛЯ ТАБЛИЦЫ
+        self.table.setMouseTracking(True)
+        self.table.mouseMoveEvent = self.table_mouse_move_event
+
+    # НОВЫЙ МЕТОД ДЛЯ СБРОСА ВЫДЕЛЕНИЯ, КОГДА КУРСОР НИЖЕ СТРОК
+    def table_mouse_move_event(self, event):
+        index = self.table.indexAt(event.pos())
+        if not index.isValid():
+            if self.hover_row != -1:
+                self.restore_row_color(self.hover_row)
+                self.hover_row = -1
+        QTableWidget.mouseMoveEvent(self.table, event)
 
     def on_cell_entered(self, row, col):
         if self.hover_row == row: return
@@ -348,6 +382,8 @@ class SearchScreen(QWidget):
         index = self.table.indexAt(event.pos())
         if not index.isValid():
             self.clear_all_checks()
+            self.table.clearSelection()
+            self.table.setCurrentItem(None)
         QTableWidget.mousePressEvent(self.table, event)
 
     def clear_all_checks(self):
