@@ -50,11 +50,10 @@ def show_message(parent, title, text, is_error=False):
     
     dialog.exec()
 
-
 def show_confirm(parent, title, text):
     dialog = QDialog(parent)
     dialog.setWindowTitle(title)
-    dialog.setMinimumWidth(400)
+    dialog.setMinimumWidth(450) # <--- ИЗМЕНЕНО С 650 НА 450
     dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
     
     dialog.setStyleSheet("""

@@ -427,6 +427,9 @@ class MainWindow(QMainWindow):
                 QPushButton:pressed { background-color: #b0b0b0; }
                 QComboBox { background-color: white; border: 1px solid #ccc; padding: 4px; }
                 QGroupBox { border: 1px solid #ccc; }
+                QTabBar::tab { background-color: #e0e0e0; color: black; padding: 8px 16px; border: 1px solid #999; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; font-weight: bold; }
+                QTabBar::tab:selected { background-color: #ffffff; border-bottom: 1px solid #ffffff; }
+                QTabBar::tab:hover:!selected { background-color: #d0d0d0; }
             """)
             
         elif theme_name == "Тёмная":
@@ -445,6 +448,9 @@ class MainWindow(QMainWindow):
                 QGroupBox { border: 1px solid #555; }
                 QMessageBox { background-color: #2b2b2b; }
                 QMessageBox QLabel { color: white; font-size: 14px; }
+                QTabBar::tab { background-color: #3c3c3c; color: white; padding: 8px 16px; border: 1px solid #555; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; font-weight: bold; }
+                QTabBar::tab:selected { background-color: #333333; border-bottom: 1px solid #333333; }
+                QTabBar::tab:hover:!selected { background-color: #4c4c4c; }
             """)
             
         elif theme_name == "Синяя":
@@ -460,6 +466,9 @@ class MainWindow(QMainWindow):
                 QPushButton:pressed { background-color: #b0b0b0; }
                 QComboBox { background-color: white; border: 1px solid #99bbdd; padding: 4px; }
                 QGroupBox { border: 1px solid #99bbdd; }
+                QTabBar::tab { background-color: #b3d4f0; color: #002244; padding: 8px 16px; border: 1px solid #99bbdd; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; font-weight: bold; }
+                QTabBar::tab:selected { background-color: #ffffff; border-bottom: 1px solid #ffffff; }
+                QTabBar::tab:hover:!selected { background-color: #99bbdd; }
             """)
 
         elif theme_name == "Своя тема":
@@ -486,6 +495,9 @@ class MainWindow(QMainWindow):
                 QPushButton:pressed {{ background-color: {header_bg}; border: 2px solid #555; }}
                 QComboBox {{ background-color: {input_bg}; color: {text}; border: 1px solid #ccc; padding: 4px; }}
                 QGroupBox {{ border: 1px solid #ccc; }}
+                QTabBar::tab {{ background-color: {button_bg}; color: {button_text}; padding: 8px 16px; border: 1px solid #999; border-bottom: none; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; font-weight: bold; }}
+                QTabBar::tab:selected {{ background-color: {table_bg}; border-bottom: 1px solid {table_bg}; color: {text}; }}
+                QTabBar::tab:hover:!selected {{ background-color: {header_bg}; }}
             """)
 
         self.export_config["theme"] = theme_name
