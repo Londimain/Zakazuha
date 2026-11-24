@@ -210,34 +210,81 @@ class MainWindow(QMainWindow):
 
     def perform_update(self, url):
         try:
+            import subprocess  # Импортируем здесь, чтобы не засорять глобальную область
+
+            # Если в version.json относительный путь — склеиваем с папкой БД
             if not url.startswith("http") and not os.path.isabs(url):
                 url = os.path.join(os.path.dirname(self.db_path), url)
-                
-            update_dir = os.path.join(USER_DATA_DIR, "updates")
+
+            update_dir = os.path.join(tempfile.gettempdir(), "ZakazuhaUpdates")
             os.makedirs(update_dir, exist_ok=True)
-            
+
             from PySide6.QtWidgets import QProgressDialog
-            
-            progress = QProgressDialog("Скачивание обновления...", "Отмена", 0, 100, self)
+
+            progress = QProgressDialog("Скачивание обновления...", None, 0, 100, self)
             progress.setWindowTitle("Обновление")
             progress.setWindowModality(Qt.WindowModal)
             progress.setMinimumDuration(0)
             progress.setValue(0)
-            
+
             def update_progress(val):
                 progress.setValue(val)
                 QApplication.processEvents()
-                
+
             local_file = download_installer(url, update_dir, update_progress)
             progress.setValue(100)
             progress.close()
-            
+
+            if not os.path.exists(local_file):
+                raise Exception(f"Файл установщика не найден после загрузки:\n{local_file}")
+            if os.path.getsize(local_file) < 102400:  # < 100 КБ
+                raise Exception(
+                    f"Файл установщика повреждён (слишком маленький):\n{local_file}\n"
+                    f"Размер: {os.path.getsize(local_file)} байт"
+                )
+
             self.is_updating = True
-            os.startfile(local_file)
-            QApplication.instance().quit()
-            
+
+            # 1. Сначала СОХРАНЯЕМ все данные!
+            try:
+                self.order_manager.save_draft(self.draft_path)
+                self.save_editing_order_state()
+                self.save_config()
+            except Exception as e:
+                print(f"Ошибка сохранения состояния перед обновлением: {e}")
+
+            # 2. Затем запускаем установщик ОДИН РАЗ
+            creation_flags = 0
+            if hasattr(subprocess, "DETACHED_PROCESS"):
+                creation_flags = (
+                    subprocess.DETACHED_PROCESS
+                    | subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+
+            subprocess.Popen(
+                [
+                    local_file,
+                    "/SILENT",
+                    "/CLOSEAPPLICATIONS",
+                    "/RESTARTAPPLICATIONS",
+                ],
+                close_fds=True,
+                creationflags=creation_flags,
+            )
+
+            # 3. Мгновенно завершаем текущий процесс, чтобы установщик
+            # не ждал, пока Python закроет окна и освободит файлы.
+            # Мы уже сохранили все данные выше, так что это безопасно.
+            import os
+            os._exit(0)
+
         except Exception as e:
-            show_message(self, "Ошибка", f"Не удалось скачать обновление:\n{e}", is_error=True)
+            show_message(
+                self,
+                "Ошибка",
+                f"Не удалось выполнить обновление:\n{e}",
+                is_error=True,
+            )
 
     def update_db_status(self):
         if os.path.abspath(self.db_path) == os.path.abspath(DEFAULT_DB_PATH):

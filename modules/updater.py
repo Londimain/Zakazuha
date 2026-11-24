@@ -47,13 +47,20 @@ class UpdateChecker(QThread):
 def download_installer(url, dest_dir, progress_callback=None):
     filename = os.path.basename(url)
     filepath = os.path.join(dest_dir, filename)
-    
+
+    # Убираем старую версию файла, если она осталась от прошлой попытки
+    if os.path.exists(filepath):
+        try:
+            os.remove(filepath)
+        except Exception:
+            pass
+
     if url.startswith("http://") or url.startswith("https://"):
         resp = requests.get(url, stream=True, timeout=60)
         resp.raise_for_status()
-        total = int(resp.headers.get('content-length', 0))
+        total = int(resp.headers.get("content-length", 0))
         downloaded = 0
-        with open(filepath, 'wb') as f:
+        with open(filepath, "wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
@@ -63,13 +70,25 @@ def download_installer(url, dest_dir, progress_callback=None):
     else:
         # Локальный или сетевой путь
         if not os.path.exists(url):
-            raise Exception(f"Файл установщика не найден:\n{url}")
-        
-        # Имитируем прогресс для локальной копии
+            raise Exception(
+                f"Файл установщика не найден по пути:\n{url}\n\n"
+                "Проверьте, что сетевой диск доступен и открыт в текущей "
+                "сессии пользователя (Windows не пробрасывает маппинги "
+                "дисков в процессы, запущенные с повышенными правами)."
+            )
         if progress_callback:
             progress_callback(50)
-        shutil.copy2(url, filepath)
+        try:
+            shutil.copy2(url, filepath)
+        except PermissionError as e:
+            raise Exception(
+                f"Нет доступа к файлу установщика:\n{url}\n\nОшибка: {e}"
+            )
+        except Exception as e:
+            raise Exception(
+                f"Не удалось скопировать установщик:\n{url}\n\nОшибка: {e}"
+            )
         if progress_callback:
             progress_callback(100)
-        
+
     return filepath

@@ -2,7 +2,7 @@
 ; Создан для сборки, выполненной через PyInstaller (файл Zakazuha.exe в папке dist)
 
 #define MyAppName "Заказуха"
-#define MyAppVersion "2.1.4"
+#define MyAppVersion "2.1.5"
 #define MyAppPublisher "Энергослужба"
 ; ВАЖНО: Имя файла на английском, как его собрал PyInstaller
 #define MyAppExeName "Zakazuha.exe" 
@@ -14,7 +14,7 @@ VersionInfoVersion={#MyAppVersion}.0
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 CloseApplications=force
-RestartApplications=no
+RestartApplications=yes
 CloseApplicationsFilter={#MyAppExeName}
 
 
@@ -38,18 +38,29 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\Zakazuha.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ico\app.ico"; DestDir: "{app}\ico"; Flags: ignoreversion
-Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion  ;
+Source: "version.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{app}"; Permissions: users-modify
 
 [Icons]
-; Ярлыки будут называться по-русски ({#MyAppName}), но ссылаться на английский файл ({#MyAppExeName})
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; Убрали skipifsilent, чтобы программа запускалась и после тихой установки (/SILENT)
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall
+
+[Code]
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // Принудительно закрываем программу перед началом установки.
+  // Это гарантирует, что файлы не будут заблокированы.
+  Exec('taskkill.exe', '/f /im Zakazuha.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := True;
+end;

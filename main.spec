@@ -1,3 +1,4 @@
+# main.spec
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
@@ -36,7 +37,7 @@ exe = EXE(
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     icon='ico/app.ico',
+    runtime_tmpdir=r'C:\Users\Public\ZakazuhaTemp',
 )

@@ -212,8 +212,16 @@ class PublisherApp:
             clean_ver = f"{v1}.{v2}.{v3}"
             content = re.sub(r'filevers=\(.*?\)', f'filevers={v_tuple}', content)
             content = re.sub(r'prodvers=\(.*?\)', f'prodvers={v_tuple}', content)
-            content = re.sub(r"StringStruct\('FileVersion', '.*?'\)", f"StringStruct('FileVersion', '{clean_ver}.0')", content)
-            content = re.sub(r"StringStruct\('ProductVersion', '.*?'\)", f"StringStruct('ProductVersion', '{clean_ver}.0')", content)
+            content = re.sub(
+                r"StringStruct\(u?'FileVersion',\s*u?'[^']*'\)",
+                f"StringStruct(u'FileVersion', u'{clean_ver}.0')",
+                content
+            )
+            content = re.sub(
+                r"StringStruct\(u?'ProductVersion',\s*u?'[^']*'\)",
+                f"StringStruct(u'ProductVersion', u'{clean_ver}.0')",
+                content
+            )
             with open(path_txt, 'w', encoding='utf-8') as f:
                 f.write(content)
             files_updated += 1
@@ -226,26 +234,31 @@ class PublisherApp:
             if os.path.exists(path_json):
                 with open(path_json, 'r', encoding='utf-8') as f:
                     vdata = json.load(f)
-                
-                vdata['latest_version'] = version
-                
-                if 'download_url' in vdata and vdata['download_url']:
-                    vdata['download_url'] = re.sub(r'v\d+\.\d+\.\d+\.exe', f'v{version}.exe', vdata['download_url'])
-                else:
-                    vdata['download_url'] = f"Zakazuha_Setup_v{version}.exe"
-
-                with open(path_json, 'w', encoding='utf-8') as f:
-                    json.dump(vdata, f, ensure_ascii=False, indent=4)
-                files_updated += 1
             else:
-                vdata = {
-                    "latest_version": version,
-                    "download_url": f"Zakazuha_Setup_v{version}.exe",
-                    "release_notes": "- Исправлены ошибки\n- Улучшена стабильность"
-                }
-                with open(path_json, 'w', encoding='utf-8') as f:
-                    json.dump(vdata, f, ensure_ascii=False, indent=4)
-                files_updated += 1
+                vdata = {"release_notes": "- Исправлены ошибки\n- Улучшена стабильность"}
+
+            vdata['latest_version'] = version
+            
+            if 'download_url' in vdata and vdata['download_url']:
+                vdata['download_url'] = re.sub(r'v\d+\.\d+\.\d+\.exe', f'v{version}.exe', vdata['download_url'])
+            else:
+                vdata['download_url'] = f"Zakazuha_Setup_v{version}.exe"
+
+            # ВАЖНО: Накапливаем историю прямо в локальном файле
+            history = vdata.get("history", [])
+            history = [h for h in history if h.get("version") != version]
+            
+            import datetime
+            history.insert(0, {
+                "version": version,
+                "date": datetime.date.today().strftime("%d.%m.%Y"),
+                "notes": vdata.get("release_notes", "- Исправлены ошибки")
+            })
+            vdata["history"] = history
+
+            with open(path_json, 'w', encoding='utf-8') as f:
+                json.dump(vdata, f, ensure_ascii=False, indent=4)
+            files_updated += 1
         except Exception as e:
             errors.append(f"version.json: {e}")
 
@@ -317,12 +330,10 @@ class PublisherApp:
             notes = notes.replace('\r\n', '\n').replace('\r', '\n')
             notes = re.sub(r' +', ' ', notes)
             
-            download_url = os.path.join(net_path, installer_name)
-            
-            # ВАЖНО: Сначала определяем путь к файлу, а потом его читаем!
+            download_url = installer_name
             json_path = os.path.join(net_path, "version.json")
 
-            # Читаем старую историю, если файл существует
+            # Читаем старую историю из сети
             existing_history = []
             if os.path.exists(json_path):
                 try:
@@ -331,7 +342,6 @@ class PublisherApp:
                         if "history" in old_data:
                             existing_history = old_data["history"]
                         elif "latest_version" in old_data:
-                            # Конвертируем старый формат в историю
                             existing_history.append({
                                 "version": old_data["latest_version"],
                                 "date": "Ранее",
@@ -340,7 +350,17 @@ class PublisherApp:
                 except Exception:
                     pass
 
-            # Формируем запись о новой версии
+            # СТРАХОВКА: Если в сети истории нет, берем её из локального файла
+            if not existing_history:
+                local_json = os.path.join(BASE_DIR, "version.json")
+                if os.path.exists(local_json):
+                    try:
+                        with open(local_json, 'r', encoding='utf-8') as f:
+                            local_data = json.load(f)
+                            existing_history = local_data.get("history", [])
+                    except Exception:
+                        pass
+
             import datetime
             new_release = {
                 "version": version,
@@ -348,7 +368,6 @@ class PublisherApp:
                 "notes": notes
             }
             
-            # Удаляем, если такая версия уже есть (при перезаписи), и добавляем в начало
             existing_history = [h for h in existing_history if h["version"] != version]
             existing_history.insert(0, new_release)
 
