@@ -142,7 +142,7 @@ class UpdateScreen(QWidget):
             btn_del = QPushButton("Удалить")
             btn_del.setFixedSize(85, 28)
             btn_del.setStyleSheet("""
-                QPushButton { background-color: #d9534f; color: white; border: 1px solid #999; border-radius: 4px; font-weight: bold; }
+                QPushButton { background-color: #d9534f; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
                 QPushButton:hover { background-color: #c9302c; }
                 QPushButton:pressed { background-color: #ac2925; }
             """)

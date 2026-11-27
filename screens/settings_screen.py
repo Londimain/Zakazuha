@@ -47,7 +47,7 @@ class SettingsScreen(QWidget):
         
         btn_apply_db = QPushButton("Применить путь к базе")
         btn_apply_db.setStyleSheet("""
-            QPushButton { background-color: #0078D7; color: white; font-weight: bold; border-radius: 4px; padding: 6px; }
+            QPushButton { background-color: #0078D7; color: black; font-weight: bold; border-radius: 4px; padding: 6px; }
             QPushButton:hover { background-color: #005a9e; }
             QPushButton:pressed { background-color: #004578; }
         """)
