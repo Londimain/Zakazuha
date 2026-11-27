@@ -2,7 +2,7 @@
 ; Создан для сборки, выполненной через PyInstaller (файл Zakazuha.exe в папке dist)
 
 #define MyAppName "Заказуха"
-#define MyAppVersion "2.1.6"
+#define MyAppVersion "2.1.7"
 #define MyAppPublisher "Энергослужба"
 ; ВАЖНО: Имя файла на английском, как его собрал PyInstaller
 #define MyAppExeName "Zakazuha.exe" 

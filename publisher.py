@@ -174,8 +174,17 @@ class PublisherApp:
         except ValueError:
             messagebox.showerror("Ошибка", "Неверный формат версии.")
             return
-            
+
         v_tuple = f"({v1}, {v2}, {v3}, 0)"
+
+        # Берём notes из виджета и очищаем их
+        new_notes = self.notes_text.get("1.0", "end-1c").strip()
+        new_notes = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', new_notes)
+        new_notes = re.sub(r'[^\S\r\n]', ' ', new_notes)
+        new_notes = new_notes.replace('\r\n', '\n').replace('\r', '\n')
+        new_notes = re.sub(r' +', ' ', new_notes)
+        if not new_notes:
+            new_notes = "- Исправлены ошибки\n- Улучшена стабильность"
 
         files_updated = 0
         errors = []
@@ -228,7 +237,7 @@ class PublisherApp:
         except Exception as e:
             errors.append(f"version_info.txt: {e}")
 
-        # 4. Локальный version.json
+        # 4. Локальный version.json — ИСПРАВЛЕНО
         path_json = os.path.join(BASE_DIR, "version.json")
         try:
             if os.path.exists(path_json):
@@ -238,21 +247,23 @@ class PublisherApp:
                 vdata = {"release_notes": "- Исправлены ошибки\n- Улучшена стабильность"}
 
             vdata['latest_version'] = version
-            
+            vdata['release_notes'] = new_notes  # <-- ИСПРАВЛЕНИЕ: обновляем поле
+
             if 'download_url' in vdata and vdata['download_url']:
-                vdata['download_url'] = re.sub(r'v\d+\.\d+\.\d+\.exe', f'v{version}.exe', vdata['download_url'])
+                vdata['download_url'] = re.sub(
+                    r'v\d+\.\d+\.\d+\.exe', f'v{version}.exe', vdata['download_url']
+                )
             else:
                 vdata['download_url'] = f"Zakazuha_Setup_v{version}.exe"
 
-            # ВАЖНО: Накапливаем историю прямо в локальном файле
             history = vdata.get("history", [])
             history = [h for h in history if h.get("version") != version]
-            
+
             import datetime
             history.insert(0, {
                 "version": version,
                 "date": datetime.date.today().strftime("%d.%m.%Y"),
-                "notes": vdata.get("release_notes", "- Исправлены ошибки")
+                "notes": new_notes  # <-- ИСПРАВЛЕНИЕ: новые notes, а не старые
             })
             vdata["history"] = history
 
@@ -361,6 +372,19 @@ class PublisherApp:
                     except Exception:
                         pass
 
+            # Защита от случайной перезаписи заметок существующей версии
+            for h in existing_history:
+                if h.get("version") == version and h.get("notes") != notes:
+                    if not messagebox.askyesno(
+                        "Версия уже существует",
+                        f"Версия {version} уже есть в истории с другими примечаниями.\n\n"
+                        f"Было:\n{h.get('notes', '')}\n\n"
+                        f"Станет:\n{notes}\n\n"
+                        f"Заменить примечания для этой версии?"
+                    ):
+                        self.status_lbl.config(text="Публикация отменена", fg="orange")
+                        return
+                    
             import datetime
             new_release = {
                 "version": version,
